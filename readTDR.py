@@ -89,7 +89,7 @@ class Manipulandum(Enum):
     EyeResponseField8 = 19
 
 
-class StartResponseSignal(Enum):
+class StartResponseSignalCode(Enum):
     PressLever1 = -1
     ReleaseLever1 = 1
     PressLever2 = -2
@@ -118,7 +118,7 @@ class IntervalType(Enum):
 @dataclass(kw_only=True)
 class TrialHeader(Header):
     id: str = "$TH1"
-    nLines: int = 4
+    nLines: int = 5
     headerVersion: int = 5
     trialNumber: int = None
     stimulusNumber: int = None
@@ -141,9 +141,10 @@ class TrialHeader(Header):
         tokens = lines[0].split()
         id, nLines, version = tokens[0:3]
 
-        assert self.id == id
-        assert self.nLines == int(nLines)
-        assert self.headerVersion == int(version)
+        assert self.id == id        
+        assert self.headerVersion == int(version)        
+        if int(version) >= 6:
+            assert self.nLines == int(nLines)
 
         self.trialNumber = int(tokens[3])
         self.stimulusNumber = int(tokens[4])
@@ -237,8 +238,46 @@ class TrialSubheader3(Header):
         self.intervalType = [IntervalType(int(code)) for code in tokens[4:]]
 
 
+@dataclass(kw_only=True)
+class TrialSubheader4(Header):
+    id: str = "$TS4"
+    nLines: int = 1
+    headerVersion: int = 1
+    signals: list[StartResponseSignalCode] = None
+
+    @dataclass
+    class StartStopSignal:
+        type: StartResponseSignalCode
+        # interval of occurrence
+        interval: int
+        # time of occurrence relative to begin of interval
+        tOccurrenceMS: float
+
+    def from_lines(self, lines: list[str]):
+        tokens = lines[0].split()
+        id, nLines, version = tokens[0:3]
+
+        assert self.id == id
+        assert self.nLines == int(nLines)
+        assert self.headerVersion == int(version)
+
+        nSignals = int(tokens[3])
+
+        self.signals = []
+        for iSignal in range(nSignals):
+            type = StartResponseSignalCode(int(tokens[4 + iSignal * 3]))
+            interval = int(tokens[5 + iSignal * 3])
+            tOccurrenceMS = float(tokens[6 + iSignal * 3])
+            self.signals.append(TrialSubheader4.StartStopSignal(type, interval, tOccurrenceMS))
+
+
 HeaderIdMap = {"$FH1": FileStartHeader, "$FH2": FileEndHeader, "$TH1": TrialHeader}
-SubHeaderIdMap = {"$TS1": TrialSubheader1, "$TS2": TrialSubheader2, "$TS3": TrialSubheader3}
+SubHeaderIdMap = {
+    "$TS1": TrialSubheader1,
+    "$TS2": TrialSubheader2,
+    "$TS3": TrialSubheader3,
+    "$TS4": TrialSubheader4,
+}
 
 
 def read_tdr(filename: pathlib.Path) -> list[Header]:
@@ -265,7 +304,7 @@ def read_tdr(filename: pathlib.Path) -> list[Header]:
             continue
 
         header = HeaderIdMap[headerId]()
-        header.from_lines(lines[iLine : iLine + nLines])
+        header.from_lines(lines[iLine : iLine + header.nLines])
         headers.append(header)
 
     return headers
