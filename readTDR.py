@@ -5,6 +5,7 @@ import warnings
 from dataclasses import dataclass
 import datetime
 
+
 def remove_comment(line: str):
     return line.split(sep="//", maxsplit=1)[0].rstrip()
 
@@ -107,6 +108,13 @@ class StartResponseSignal(Enum):
     IsFixating = 21
 
 
+class IntervalType(Enum):
+    Normal = 0
+    WaitForStartSignal = 1
+    ResponseAllowed = 2
+    ResponseRequired = 3
+
+
 @dataclass(kw_only=True)
 class TrialHeader(Header):
     id: str = "$TH1"
@@ -126,12 +134,12 @@ class TrialHeader(Header):
     eyeControlFlag: bool = None
     intervalOfFrameLoss: int = None
     timeOfFrameLoss: float = None
-    subheaders : list[Header] = None
+    subheaders: list[Header] = None
 
     def from_lines(self, lines: list[str]):
         # line 1
         tokens = lines[0].split()
-        id, nLines, version = tokens[0:3]        
+        id, nLines, version = tokens[0:3]
 
         assert self.id == id
         assert self.nLines == int(nLines)
@@ -166,60 +174,79 @@ class TrialHeader(Header):
             subheader.from_lines(lines[iLine : iLine + nLines])
             self.subheaders.append(subheader)
 
+
 @dataclass(kw_only=True)
 class TrialSubheader1(Header):
     id: str = "$TS1"
     nLines: int = 1
     headerVersion: int = 3
     trialNumber: int = None
-    tAbsTrialStart : str = None
-    tRelTrialStartMIN : float = None
-    tPositiveTriggerTransitionMS : list[float] = None
-    tNegativeTriggerTransitionMS : list[float] = None
+    tAbsTrialStart: str = None
+    tRelTrialStartMIN: float = None
+    tPositiveTriggerTransitionMS: list[float] = None
+    tNegativeTriggerTransitionMS: list[float] = None
 
     def from_lines(self, lines: list[str]):
         tokens = lines[0].split()
         id, nLines, version = tokens[0:3]
-        
+
         assert self.id == id
         assert self.nLines == int(nLines)
         assert self.headerVersion == int(version)
 
         self.tTrialStart = tokens[4]
-        self.tRelTrialStartMIN = float(tokens[5])/600.0
+        self.tRelTrialStartMIN = float(tokens[5]) / 600.0
 
-        self.tPositiveTriggerTransitionMS = [float(t)*1000 for t in tokens[6::2]]
-        self.tNegativeTriggerTransitionMS = [float(t)*1000 for t in tokens[7::2]]
-        
+        self.tPositiveTriggerTransitionMS = [float(t) * 1000 for t in tokens[6::2]]
+        self.tNegativeTriggerTransitionMS = [float(t) * 1000 for t in tokens[7::2]]
+
+
 @dataclass(kw_only=True)
 class TrialSubheader2(Header):
     id: str = "$TS2"
     nLines: int = 1
     headerVersion: int = 1
-    tIntendedIntervalDurationMS : list[float] = None
+    tIntendedIntervalDurationMS: list[float] = None
 
     def from_lines(self, lines: list[str]):
         tokens = lines[0].split()
         id, nLines, version = tokens[0:3]
-        
+
         assert self.id == id
         assert self.nLines == int(nLines)
         assert self.headerVersion == int(version)
 
-        self.tIntendedIntervalDurationMS = [float(t)*1000 for t in tokens[4:]]
+        self.tIntendedIntervalDurationMS = [float(t) * 1000 for t in tokens[4:]]
+
+
+@dataclass(kw_only=True)
+class TrialSubheader3(Header):
+    id: str = "$TS3"
+    nLines: int = 1
+    headerVersion: int = 1
+    intervalType: IntervalType = None
+
+    def from_lines(self, lines: list[str]):
+        tokens = lines[0].split()
+        id, nLines, version = tokens[0:3]
+
+        assert self.id == id
+        assert self.nLines == int(nLines)
+        assert self.headerVersion == int(version)
+
+        self.intervalType = [IntervalType(int(code)) for code in tokens[4:]]
 
 
 HeaderIdMap = {"$FH1": FileStartHeader, "$FH2": FileEndHeader, "$TH1": TrialHeader}
-SubHeaderIdMap = {"$TS1": TrialSubheader1, "$TS2": TrialSubheader2}
+SubHeaderIdMap = {"$TS1": TrialSubheader1, "$TS2": TrialSubheader2, "$TS3": TrialSubheader3}
 
 
 def read_tdr(filename: pathlib.Path) -> list[Header]:
     with open(filename, "r") as file:
         lines: list[str] = file.readlines()
-        
+
     headers: list[Header] = []
     for iLine, line in enumerate(lines):
-
         # only handle start of headers
         if not line.startswith("$"):
             continue
