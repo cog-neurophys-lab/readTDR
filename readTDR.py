@@ -172,7 +172,10 @@ class TrialSubheader1(Header):
     nLines: int = 1
     headerVersion: int = 3
     trialNumber: int = None
-    tTrialStart : str = None
+    tAbsTrialStart : str = None
+    tRelTrialStartMIN : float = None
+    tPositiveTriggerTransitionMS : list[float] = None
+    tNegativeTriggerTransitionMS : list[float] = None
 
     def from_lines(self, lines: list[str]):
         tokens = lines[0].split()
@@ -183,12 +186,31 @@ class TrialSubheader1(Header):
         assert self.headerVersion == int(version)
 
         self.tTrialStart = tokens[4]
-    # // subheader / lines / version / trial# / abs. trial start time / PosTransTrg0 / NegTransTrg0 / PosTransTrg1 / NegTransTrg1 / PosTransTrg2 / NegTransTrg2 / PosTransTrg3 /  ...
-    # $TS1            1       3           0        10:30:01   12345678     0.0000   0.5000    0.5000   1.0000    1.0000   1.5000    . . .
+        self.tRelTrialStartMIN = float(tokens[5])/600.0
+
+        self.tPositiveTriggerTransitionMS = [float(t)*1000 for t in tokens[6::2]]
+        self.tNegativeTriggerTransitionMS = [float(t)*1000 for t in tokens[7::2]]
+        
+@dataclass(kw_only=True)
+class TrialSubheader2(Header):
+    id: str = "$TS2"
+    nLines: int = 1
+    headerVersion: int = 1
+    tIntendedIntervalDurationMS : list[float] = None
+
+    def from_lines(self, lines: list[str]):
+        tokens = lines[0].split()
+        id, nLines, version = tokens[0:3]
+        
+        assert self.id == id
+        assert self.nLines == int(nLines)
+        assert self.headerVersion == int(version)
+
+        self.tIntendedIntervalDurationMS = [float(t)*1000 for t in tokens[4:]]
 
 
 HeaderIdMap = {"$FH1": FileStartHeader, "$FH2": FileEndHeader, "$TH1": TrialHeader}
-SubHeaderIdMap = {"$TS1": TrialSubheader1}
+SubHeaderIdMap = {"$TS1": TrialSubheader1, "$TS2": TrialSubheader2}
 
 
 def read_tdr(filename: pathlib.Path) -> list[Header]:
