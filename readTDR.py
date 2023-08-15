@@ -116,67 +116,6 @@ class IntervalType(Enum):
 
 
 @dataclass(kw_only=True)
-class TrialHeader(Header):
-    id: str = "$TH1"
-    nLines: int = 5
-    headerVersion: int = 5
-    trialNumber: int = None
-    stimulusNumber: int = None
-    timeSequence: int = None
-    wasPerfectMonkey: bool = None
-    wasHit: bool = None
-    outcome: TrialOutcome = None
-    manipulandum: Manipulandum = None
-    wasPreciseFixation: bool = None
-    reactionTimeMS: float = None
-    rewardDurationMS: float = None
-    lastInterval: int = None
-    eyeControlFlag: bool = None
-    intervalOfFrameLoss: int = None
-    timeOfFrameLoss: float = None
-    subheaders: list[Header] = None
-
-    def from_lines(self, lines: list[str]):
-        # line 1
-        tokens = lines[0].split()
-        id, nLines, version = tokens[0:3]
-
-        assert self.id == id        
-        assert self.headerVersion == int(version)        
-        if int(version) >= 6:
-            assert self.nLines == int(nLines)
-
-        self.trialNumber = int(tokens[3])
-        self.stimulusNumber = int(tokens[4])
-        self.timeSequence = int(tokens[5])
-        self.wasPerfectMonkey = bool(int(tokens[6]))
-        self.wasHit = bool(int(tokens[7]))
-        self.outcome = TrialOutcome(int(tokens[8]))
-        self.manipulandum = Manipulandum(int(tokens[9]))
-        self.wasPreciseFixation = bool(int(tokens[10]))
-        self.reactionTimeMS = float(tokens[11])
-        self.rewardDurationMS = float(tokens[12])
-        self.lastInterval = int(tokens[13])
-        self.eyeControlFlag = bool(int(tokens[14]))
-        self.intervalOfFrameLoss = int(tokens[15])
-        self.timeOfFrameLoss = float(tokens[16])
-
-        # process subheaders
-        lines = lines[1:]
-        self.subheaders = []
-        for iLine, line in enumerate(lines):
-            if not line.startswith("$"):
-                continue
-            subheaderId, nLines, subheaderVersion = line.split()[:3]
-            if not subheaderId in SubHeaderIdMap.keys():
-                continue
-            nLines = int(nLines)
-            subheader = SubHeaderIdMap[subheaderId]()
-            subheader.from_lines(lines[iLine : iLine + nLines])
-            self.subheaders.append(subheader)
-
-
-@dataclass(kw_only=True)
 class TrialSubheader1(Header):
     id: str = "$TS1"
     nLines: int = 1
@@ -195,7 +134,7 @@ class TrialSubheader1(Header):
         assert self.nLines == int(nLines)
         assert self.headerVersion == int(version)
 
-        self.tTrialStart = tokens[4]
+        self.tAbsTrialStart = tokens[4]
         self.tRelTrialStartMIN = float(tokens[5]) / 60.0 / 10000.0
 
         self.tPositiveTriggerTransitionMS = [float(t) * 1000 for t in tokens[6::2]]
@@ -268,7 +207,83 @@ class TrialSubheader4(Header):
             type = StartResponseSignalCode(int(tokens[4 + iSignal * 3]))
             interval = int(tokens[5 + iSignal * 3])
             tOccurrenceMS = float(tokens[6 + iSignal * 3])
-            self.signals.append(TrialSubheader4.StartStopSignal(type, interval, tOccurrenceMS))
+            self.signals.append(
+                TrialSubheader4.StartStopSignal(type, interval, tOccurrenceMS)
+            )
+
+
+@dataclass(kw_only=True)
+class TrialHeader(Header):
+    id: str = "$TH1"
+    nLines: int = 5
+    headerVersion: int = 5
+    trialNumber: int = None
+    stimulusNumber: int = None
+    timeSequence: int = None
+    wasPerfectMonkey: bool = None
+    wasHit: bool = None
+    outcome: TrialOutcome = None
+    manipulandum: Manipulandum = None
+    wasPreciseFixation: bool = None
+    reactionTimeMS: float = None
+    rewardDurationMS: float = None
+    lastInterval: int = None
+    eyeControlFlag: bool = None
+    intervalOfFrameLoss: int = None
+    timeOfFrameLoss: float = None    
+    subheader1: TrialSubheader1 = None
+    subheader2: TrialSubheader2 = None
+    subheader3: TrialSubheader3 = None
+    subheader4: TrialSubheader4 = None
+
+    def from_lines(self, lines: list[str]):
+        # line 1
+        tokens = lines[0].split()
+        id, nLines, version = tokens[0:3]
+
+        assert self.id == id
+        assert self.headerVersion == int(version)
+        if int(version) >= 6:
+            assert self.nLines == int(nLines)
+
+        self.trialNumber = int(tokens[3])
+        self.stimulusNumber = int(tokens[4])
+        self.timeSequence = int(tokens[5])
+        self.wasPerfectMonkey = bool(int(tokens[6]))
+        self.wasHit = bool(int(tokens[7]))
+        self.outcome = TrialOutcome(int(tokens[8]))
+        self.manipulandum = Manipulandum(int(tokens[9]))
+        self.wasPreciseFixation = bool(int(tokens[10]))
+        self.reactionTimeMS = float(tokens[11])
+        self.rewardDurationMS = float(tokens[12])
+        self.lastInterval = int(tokens[13])
+        self.eyeControlFlag = bool(int(tokens[14]))
+        self.intervalOfFrameLoss = int(tokens[15])
+        self.timeOfFrameLoss = float(tokens[16])
+
+        # process subheaders
+        lines = lines[1:]
+        self.subheaders = []
+        for iLine, line in enumerate(lines):
+            if not line.startswith("$"):
+                continue
+            subheaderId, nLines, subheaderVersion = line.split()[:3]
+            if not subheaderId in SubHeaderIdMap.keys():
+                continue
+            nLines = int(nLines)
+            subheader = SubHeaderIdMap[subheaderId]()
+            subheader.from_lines(lines[iLine : iLine + nLines])
+            match subheaderId:
+                case "$TS1":
+                    self.subheader1 = subheader
+                case "$TS2":
+                    self.subheader2 = subheader
+                case "$TS3":
+                    self.subheader3 = subheader
+                case "$TS4":
+                    self.subheader4 = subheader
+                    
+            # self.subheaders.append(subheader)
 
 
 HeaderIdMap = {"$FH1": FileStartHeader, "$FH2": FileEndHeader, "$TH1": TrialHeader}
