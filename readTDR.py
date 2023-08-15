@@ -196,7 +196,7 @@ class TrialSubheader1(Header):
         assert self.headerVersion == int(version)
 
         self.tTrialStart = tokens[4]
-        self.tRelTrialStartMIN = float(tokens[5]) / 600.0
+        self.tRelTrialStartMIN = float(tokens[5]) / 60.0 / 10000.0
 
         self.tPositiveTriggerTransitionMS = [float(t) * 1000 for t in tokens[6::2]]
         self.tNegativeTriggerTransitionMS = [float(t) * 1000 for t in tokens[7::2]]
