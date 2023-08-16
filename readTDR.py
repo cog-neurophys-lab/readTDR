@@ -114,7 +114,6 @@ class IntervalType(Enum):
     ResponseAllowed = 2
     ResponseRequired = 3
 
-
 @dataclass(kw_only=True)
 class TrialSubheader1(Header):
     id: str = "$TS1"
@@ -125,6 +124,8 @@ class TrialSubheader1(Header):
     tRelTrialStartMIN: float = None
     tPositiveTriggerTransitionMS: list[float] = None
     tNegativeTriggerTransitionMS: list[float] = None
+
+    
 
     def from_lines(self, lines: list[str]):
         tokens = lines[0].split()
@@ -230,7 +231,7 @@ class TrialHeader(Header):
     lastInterval: int = None
     eyeControlFlag: bool = None
     intervalOfFrameLoss: int = None
-    timeOfFrameLoss: float = None    
+    timeOfFrameLoss: float = None
     subheader1: TrialSubheader1 = None
     subheader2: TrialSubheader2 = None
     subheader3: TrialSubheader3 = None
@@ -282,8 +283,10 @@ class TrialHeader(Header):
                     self.subheader3 = subheader
                 case "$TS4":
                     self.subheader4 = subheader
-                    
-            # self.subheaders.append(subheader)
+
+    def get_trial_duration(self) -> float:
+        """Returns the duration of the trial in milliseconds."""
+        return self.subheader1.tNegativeTriggerTransitionMS[self.lastInterval]
 
 
 HeaderIdMap = {"$FH1": FileStartHeader, "$FH2": FileEndHeader, "$TH1": TrialHeader}
@@ -295,7 +298,57 @@ SubHeaderIdMap = {
 }
 
 
-def read_tdr(filename: pathlib.Path) -> list[Header]:
+@dataclass
+class TDR:
+    filename: pathlib.Path
+    headers: list[Header]
+
+    def get_trials(self) -> list[TrialHeader]:
+        return [header for header in self.headers if isinstance(header, TrialHeader)]
+    
+    def get_trials_with_outcome(self, outcomes: list[TrialOutcome]) -> list[TrialHeader]:
+        return [
+            header for header in self.get_trials() if header.outcome in outcomes
+        ]
+
+    def get_hits(self) -> list[TrialHeader]:
+        return self.get_trials_with_outcome([TrialOutcome.Hit])
+    
+    def get_wrongresponse(self) -> list[TrialHeader]:
+        return self.get_trials_with_outcome([TrialOutcome.WrongResponse])
+    
+    def get_earlyhit(self) -> list[TrialHeader]:
+        return self.get_trials_with_outcome([TrialOutcome.EarlyHit])
+
+    def get_earlywrongresponse(self) -> list[TrialHeader]:
+        return self.get_trials_with_outcome([TrialOutcome.EarlyWrongResponse])
+    
+    def get_early(self) -> list[TrialHeader]:
+        return self.get_trials_with_outcome([TrialOutcome.Early])
+    
+    def get_late(self) -> list[TrialHeader]:
+        return self.get_trials_with_outcome([TrialOutcome.Late])
+    
+    def get_eyeerr(self) -> list[TrialHeader]:
+        return self.get_trials_with_outcome([TrialOutcome.EyeErr])
+    
+    def get_inexpectedstartsignal(self) -> list[TrialHeader]:
+        return self.get_trials_with_outcome([TrialOutcome.InexpectedStartSignal])
+    
+    def get_wrongstartsignal(self) -> list[TrialHeader]:
+        return self.get_trials_with_outcome([TrialOutcome.WrongStartSignal])
+    
+    def get_outcome_counts(self) -> dict[str, int]:        
+        return {outcome.name: len(self.get_trials_with_outcome([outcome])) for outcome in TrialOutcome}
+
+
+
+        
+
+   
+
+
+def read_tdr(filename: pathlib.Path) -> TDR:
     with open(filename, "r") as file:
         lines: list[str] = file.readlines()
 
@@ -322,11 +375,14 @@ def read_tdr(filename: pathlib.Path) -> list[Header]:
         header.from_lines(lines[iLine : iLine + header.nLines])
         headers.append(header)
 
-    return headers
+    return TDR(
+        headers=headers,
+        filename=filename,
+    )
 
 
 if __name__ == "__main__":
     filename = "test.tdr"
-    headers = read_tdr(filename)
+    tdr = read_tdr(filename)
 
     a = 1
