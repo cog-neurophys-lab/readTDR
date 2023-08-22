@@ -2,7 +2,7 @@ from enum import Enum
 import pathlib
 import abc
 import warnings
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import datetime
 
 
@@ -114,6 +114,7 @@ class IntervalType(Enum):
     ResponseAllowed = 2
     ResponseRequired = 3
 
+
 @dataclass(kw_only=True)
 class TrialSubheader1(Header):
     id: str = "$TS1"
@@ -124,8 +125,6 @@ class TrialSubheader1(Header):
     tRelTrialStartMIN: float = None
     tPositiveTriggerTransitionMS: list[float] = None
     tNegativeTriggerTransitionMS: list[float] = None
-
-    
 
     def from_lines(self, lines: list[str]):
         tokens = lines[0].split()
@@ -284,12 +283,87 @@ class TrialHeader(Header):
                 case "$TS4":
                     self.subheader4 = subheader
 
-    def get_trial_duration(self) -> float:
-        """Returns the duration of the trial in milliseconds."""
-        return self.subheader1.tNegativeTriggerTransitionMS[self.lastInterval]
+
+@dataclass(kw_only=True)
+class ObjectHeader(Header):
+    # // header / # of lines / version / object# / show-hide / Xpos / Ypos / Zpos / RotX / RotY / RotZ / ObjTypeName
+    id: str = "$OH1"
+    nLines: int = None  # including subheader
+    headerVersion: int = 1
+    objectNumber: int = None
+    showHide: bool = None
+    xPos: float = None
+    yPos: float = None
+    zPos: float = None
+    rotX: float = None
+    rotY: float = None
+    rotZ: float = None
+    typeName: str = None
+    subheaders: list[Header] = None
+
+    def from_lines(self, lines: list[str]):
+        tokens = lines[0].split()
+        id, nLines, version = tokens[0:3]
+
+        assert self.headerVersion == int(version)
+
+        self.objectNumber = int(tokens[3])
+        self.showHide = bool(int(tokens[4]))
+        self.xPos = float(tokens[5])
+        self.yPos = float(tokens[6])
+        self.zPos = float(tokens[7])
+        self.rotX = float(tokens[8])
+        self.rotY = float(tokens[9])
+        self.rotZ = float(tokens[10])
+        self.typeName = " ".join(tokens[11:])
+
+        # process subheaders
+        lines = lines[1:]
+        self.subheaders = []
+        for iLine, line in enumerate(lines):
+            if not line.startswith("$OS"):
+                continue
+            subheaderId, nLines, subheaderVersion = line.split()[:3]
+            if not self.typeName in ObjectTypeNameMap.keys():
+                continue
+            nLines = int(nLines)
+            subheader = ObjectTypeNameMap[self.typeName]()
+            subheader.from_lines(lines[iLine : iLine + nLines])
+            self.subheaders.append(subheader)
 
 
-HeaderIdMap = {"$FH1": FileStartHeader, "$FH2": FileEndHeader, "$TH1": TrialHeader}
+@dataclass(kw_only=True)
+class FixationPoint1(Header):
+    id: str = "$OS1"
+    nLines: int = 1
+    headerVersion: int = 1
+    isActive: bool = None
+    tAppearanceMS: list[float] = None
+    tDisappearanceMS: list[float] = None
+
+    def from_lines(self, lines: list[str]):
+        tokens = lines[0].split()
+        id, nLines, version = tokens[0:3]
+
+        assert self.id == id
+        assert self.nLines == int(nLines)
+        assert self.headerVersion == int(version)
+
+        self.isActive = bool(int(tokens[3]))
+        self.tAppearanceMS = [float(t) * 1000 for t in tokens[4::2]]
+        self.tDisappearanceMS = [float(t) * 1000 for t in tokens[5::2]]
+
+
+ObjectTypeNameMap = {
+    "Fixation Point 1": FixationPoint1,
+}
+
+HeaderIdMap = {
+    "$FH1": FileStartHeader,
+    "$FH2": FileEndHeader,
+    "$TH1": TrialHeader,
+    "$OH1": ObjectHeader,
+}
 SubHeaderIdMap = {
     "$TS1": TrialSubheader1,
     "$TS2": TrialSubheader2,
@@ -299,53 +373,146 @@ SubHeaderIdMap = {
 
 
 @dataclass
+class Trial:
+    # from $TH1
+    trialNumber: int = None
+    stimulusNumber: int = None
+    timeSequence: int = None
+    wasPerfectMonkey: bool = None
+    wasHit: bool = None
+    outcome: TrialOutcome = None
+    manipulandum: Manipulandum = None
+    wasPreciseFixation: bool = None
+    reactionTimeMS: float = None
+    rewardDurationMS: float = None
+    lastInterval: int = None
+    eyeControlFlag: bool = None
+    intervalOfFrameLoss: int = None
+    timeOfFrameLoss: float = None
+
+    # from $TS1
+    tAbsTrialStart: str = None
+    tRelTrialStartMIN: float = None
+    tPositiveTriggerTransitionMS: list[float] = None
+    tNegativeTriggerTransitionMS: list[float] = None
+
+    # from $TS2
+    tIntendedIntervalDurationMS: list[float] = None
+
+    # from $TS3
+    intervalType: IntervalType = None
+
+    # from $TS4
+    signals: list[TrialSubheader4.StartStopSignal] = None
+
+    # from $OH1
+    stimulusObjects: list[ObjectHeader] = field(default_factory=list)
+
+    def from_trial_header(self, header: TrialHeader):
+        self.trialNumber = header.trialNumber
+        self.stimulusNumber = header.stimulusNumber
+        self.timeSequence = header.timeSequence
+        self.wasPerfectMonkey = header.wasPerfectMonkey
+        self.wasHit = header.wasHit
+        self.outcome = header.outcome
+        self.manipulandum = header.manipulandum
+        self.wasPreciseFixation = header.wasPreciseFixation
+        self.reactionTimeMS = header.reactionTimeMS
+        self.rewardDurationMS = header.rewardDurationMS
+        self.lastInterval = header.lastInterval
+        self.eyeControlFlag = header.eyeControlFlag
+        self.intervalOfFrameLoss = header.intervalOfFrameLoss
+        self.timeOfFrameLoss = header.timeOfFrameLoss
+
+        self.tAbsTrialStart = header.subheader1.tAbsTrialStart
+        self.tRelTrialStartMIN = header.subheader1.tRelTrialStartMIN
+        self.tPositiveTriggerTransitionMS = (
+            header.subheader1.tPositiveTriggerTransitionMS
+        )
+        self.tNegativeTriggerTransitionMS = (
+            header.subheader1.tNegativeTriggerTransitionMS
+        )
+
+        self.tIntendedIntervalDurationMS = header.subheader2.tIntendedIntervalDurationMS
+
+        self.intervalType = header.subheader3.intervalType
+
+        self.signals = header.subheader4.signals
+
+    def get_trial_duration(self) -> float:
+        """Returns the duration of the trial in milliseconds."""
+        return self.tNegativeTriggerTransitionMS[self.lastInterval]
+
+
+@dataclass
 class TDR:
     filename: pathlib.Path
     headers: list[Header]
 
-    def get_trials(self) -> list[TrialHeader]:
-        return [header for header in self.headers if isinstance(header, TrialHeader)]
-    
-    def get_trials_with_outcome(self, outcomes: list[TrialOutcome]) -> list[TrialHeader]:
-        return [
-            header for header in self.get_trials() if header.outcome in outcomes
-        ]
+    def get_trials(self) -> list[Trial]:
+        trials: list[Trial] = []
+        for header in self.headers:
+            if isinstance(header, TrialHeader):
+                trial = Trial()
+                trial.from_trial_header(header)
+                trials.append(trial)
+            if isinstance(header, ObjectHeader):
+                trials[-1].stimulusObjects.append(header)
 
-    def get_hits(self) -> list[TrialHeader]:
+        return trials
+
+    def get_trials_with_outcome(self, outcomes: list[TrialOutcome]) -> list[Trial]:
+        return [trial for trial in self.get_trials() if trial.outcome in outcomes]
+
+    def get_hits(self) -> list[Trial]:
         return self.get_trials_with_outcome([TrialOutcome.Hit])
-    
-    def get_wrongresponse(self) -> list[TrialHeader]:
+
+    def get_wrongresponses(self) -> list[Trial]:
         return self.get_trials_with_outcome([TrialOutcome.WrongResponse])
-    
-    def get_earlyhit(self) -> list[TrialHeader]:
+
+    def get_earlyhits(self) -> list[Trial]:
         return self.get_trials_with_outcome([TrialOutcome.EarlyHit])
 
-    def get_earlywrongresponse(self) -> list[TrialHeader]:
+    def get_earlywrongresponses(self) -> list[Trial]:
         return self.get_trials_with_outcome([TrialOutcome.EarlyWrongResponse])
-    
-    def get_early(self) -> list[TrialHeader]:
+
+    def get_earlies(self) -> list[Trial]:
         return self.get_trials_with_outcome([TrialOutcome.Early])
-    
-    def get_late(self) -> list[TrialHeader]:
+
+    def get_lates(self) -> list[Trial]:
         return self.get_trials_with_outcome([TrialOutcome.Late])
-    
-    def get_eyeerr(self) -> list[TrialHeader]:
+
+    def get_eyeerr(self) -> list[Trial]:
         return self.get_trials_with_outcome([TrialOutcome.EyeErr])
-    
-    def get_inexpectedstartsignal(self) -> list[TrialHeader]:
+
+    def get_inexpectedstartsignal(self) -> list[Trial]:
         return self.get_trials_with_outcome([TrialOutcome.InexpectedStartSignal])
-    
+
     def get_wrongstartsignal(self) -> list[TrialHeader]:
         return self.get_trials_with_outcome([TrialOutcome.WrongStartSignal])
-    
-    def get_outcome_counts(self) -> dict[str, int]:        
-        return {outcome.name: len(self.get_trials_with_outcome([outcome])) for outcome in TrialOutcome}
 
+    def get_outcome_counts(self) -> dict[str, int]:
+        return {
+            outcome.name: len(self.get_trials_with_outcome([outcome]))
+            for outcome in TrialOutcome
+        }
 
+    def get_trials_as_dataframe(self):
+        import pandas as pd
 
-        
+        df = pd.DataFrame([vars(trial) for trial in self.get_trials()])
+        df.tRelTrialStartMIN = pd.to_timedelta(df.tRelTrialStartMIN, unit="min")
+        df.set_index("tRelTrialStartMIN", inplace=True)
 
-   
+        # change dtype of outcome column to categorical
+        df["outcome"] = df["outcome"].astype("category")
+
+        # add column with trial duration
+        df["trialDurationMS"] = [
+            trial.get_trial_duration() for trial in self.get_trials()
+        ]
+
+        return df
 
 
 def read_tdr(filename: pathlib.Path) -> TDR:
@@ -363,6 +530,10 @@ def read_tdr(filename: pathlib.Path) -> TDR:
         headerId, nLines, headerVersion = line.split()[:3]
         nLines = int(nLines)
 
+        # workaround for VStim bug #210: reported nLines is in fact 5, not 4 as reported
+        if headerId == "$TH1" and int(headerVersion) == 5:
+            nLines = 5
+
         # subheaders are handled within header objects
         if headerId in SubHeaderIdMap.keys():
             continue
@@ -372,7 +543,7 @@ def read_tdr(filename: pathlib.Path) -> TDR:
             continue
 
         header = HeaderIdMap[headerId]()
-        header.from_lines(lines[iLine : iLine + header.nLines])
+        header.from_lines(lines[iLine : iLine + nLines])
         headers.append(header)
 
     return TDR(
@@ -384,5 +555,5 @@ def read_tdr(filename: pathlib.Path) -> TDR:
 if __name__ == "__main__":
     filename = "test.tdr"
     tdr = read_tdr(filename)
-
+    trials = tdr.get_trials_as_dataframe()
     a = 1
