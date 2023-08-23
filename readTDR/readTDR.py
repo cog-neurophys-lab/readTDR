@@ -5,6 +5,7 @@ import warnings
 from dataclasses import dataclass, field
 import datetime
 
+nIntervals = 20
 
 def remove_comment(line: str):
     return line.split(sep="//", maxsplit=1)[0].rstrip()
@@ -446,8 +447,23 @@ class Trial:
         self.signals = header.subheader4.signals
 
     def get_trial_duration(self) -> float:
-        """Returns the duration of the trial in milliseconds."""
-        return self.tNegativeTriggerTransitionMS[self.lastInterval]
+        """Returns the total duration of the trial in milliseconds."""
+        return sum(self.get_interval_durations())
+    
+    def get_trial_duration_after_start_signal(self) -> float:
+        """Returns the duration of the trial from the end of the first interval waiting for a start signal in milliseconds."""
+        iFirstWaitForStartInterval = self.intervalType.index(IntervalType.WaitForStartSignal)     
+        if iFirstWaitForStartInterval is None:
+            return None
+        
+        intervalDurations = self.get_interval_durations()
+        return sum(intervalDurations[iFirstWaitForStartInterval+1:])
+    
+    def get_interval_durations(self) -> list[float]:
+        """Returns the durations of the intervals in milliseconds."""
+        return [t2 - t1 for t1, t2 in zip(self.tPositiveTriggerTransitionMS[:nIntervals], self.tNegativeTriggerTransitionMS[:nIntervals]) if t1 > 0.0 and t2 > 0.0]
+
+
 
 
 @dataclass
@@ -557,9 +573,3 @@ def read_tdr(filename: pathlib.Path) -> TDR:
         filename=filename,
     )
 
-
-if __name__ == "__main__":
-    filename = "test.tdr"
-    tdr = read_tdr(filename)
-    trials = tdr.get_trials_as_dataframe()
-    a = 1
