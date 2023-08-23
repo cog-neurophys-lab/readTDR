@@ -27,8 +27,8 @@ class FileStartHeader(Header):
     headerVersion: int = 3
     vstimVersion: str = None
     tdrVersion: str = None
-    date: str = None
-    startTime: str = None
+    date: datetime.date = None
+    startTime: datetime.time = None
     refreshRate: float = None
     iniFile: str = None
 
@@ -47,6 +47,9 @@ class FileStartHeader(Header):
 
         # line 4
         self.date, self.startTime, self.refreshRate = remove_comment(lines[3]).split()
+        self.date = datetime.datetime.strptime(self.date, '%d.%m.%Y').date()
+        self.startTime = datetime.datetime.strptime(self.startTime, "%H:%M:%S").time()
+        self.refreshRate = float(self.refreshRate)
 
         # line 5
         self.iniFile = remove_comment(lines[4])
@@ -134,6 +137,7 @@ class TrialSubheader1(Header):
         assert self.nLines == int(nLines)
         assert self.headerVersion == int(version)
 
+        self.trialNumber = int(tokens[3])
         self.tAbsTrialStart = tokens[4]
         self.tRelTrialStartMIN = float(tokens[5]) / 60.0 / 10000.0
 
@@ -156,7 +160,7 @@ class TrialSubheader2(Header):
         assert self.nLines == int(nLines)
         assert self.headerVersion == int(version)
 
-        self.tIntendedIntervalDurationMS = [float(t) * 1000 for t in tokens[4:]]
+        self.tIntendedIntervalDurationMS = [float(t) * 1000 for t in tokens[3:]]
 
 
 @dataclass(kw_only=True)
@@ -174,7 +178,7 @@ class TrialSubheader3(Header):
         assert self.nLines == int(nLines)
         assert self.headerVersion == int(version)
 
-        self.intervalType = [IntervalType(int(code)) for code in tokens[4:]]
+        self.intervalType = [IntervalType(int(code)) for code in tokens[3:]]
 
 
 @dataclass(kw_only=True)
@@ -291,7 +295,7 @@ class ObjectHeader(Header):
     nLines: int = None  # including subheader
     headerVersion: int = 1
     objectNumber: int = None
-    showHide: bool = None
+    show: bool = None
     xPos: float = None
     yPos: float = None
     zPos: float = None
@@ -304,11 +308,13 @@ class ObjectHeader(Header):
     def from_lines(self, lines: list[str]):
         tokens = lines[0].split()
         id, nLines, version = tokens[0:3]
+        self.nLines = int(nLines)
+        self.headerVersion = int(version)
 
         assert self.headerVersion == int(version)
 
         self.objectNumber = int(tokens[3])
-        self.showHide = bool(int(tokens[4]))
+        self.show = bool(int(tokens[4]))
         self.xPos = float(tokens[5])
         self.yPos = float(tokens[6])
         self.zPos = float(tokens[7])
