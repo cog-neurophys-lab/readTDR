@@ -1,6 +1,8 @@
 # readTDR
 Python tools for reading the Trial Descriptor Record created by VStim.
 
+[![ReadTDR Tests](https://github.com/cog-neurophys-lab/readTDR/actions/workflows/python-package-conda.yml/badge.svg)](https://github.com/cog-neurophys-lab/readTDR/actions/workflows/python-package-conda.yml)
+
 
 ## Packaging plotTDR into an executable on Windows
 Create an environment with only the requirements of `plotTDR`
