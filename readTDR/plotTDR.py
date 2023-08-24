@@ -15,17 +15,46 @@ import readTDR
 from readTDR import TrialOutcome
 
 # colors
+from enum import Enum
+class Color(Enum):
+    RED = (0.8, 0.0, 0.0)
+    GREEN = (0.0, 0.5, 0.0)
+    BLUE = (0.0, 0.0, 1.0)
+    YELLOW = (1.0, 1.0, 0.0)
+    CYAN = (0.0, 1.0, 1.0)
+    MAGENTA = (1.0, 0.0, 1.0)
+    ORANGE = (1.0, 165/255, 0)
+    PURPLE = (128/255, 0, 128/255)
+    PINK = (255/255, 192/255, 203/255)
+    BROWN = (165/255, 42/255, 42/255)
+    LIGHTGRAY = (0.7, 0.7, 0.7)
+    GRAY = (0.5, 0.5, 0.5)
+    DARKGRAY = (0.33, 0.33, 0.33)
+
 colors = {
-    TrialOutcome.Hit: [0.8, 0.0, 0.0],
-    TrialOutcome.EyeErr: [0.5, 0.5, 0.5],
-    TrialOutcome.Late: "b",
-    TrialOutcome.Early: "g",
-    TrialOutcome.NotStarted: [0.8, 0.8, 0.8],
-    TrialOutcome.WrongResponse: "m",
-    TrialOutcome.WrongStartSignal: "c",
-    TrialOutcome.EarlyHit: "y",
-    TrialOutcome.EarlyWrongResponse: "k",
-    TrialOutcome.InexpectedStartSignal: [0.5, 0.5, 0.5],
+    TrialOutcome.Hit: Color.GREEN.value,
+    TrialOutcome.EyeErr: Color.RED.value,
+    TrialOutcome.Late: Color.ORANGE.value,
+    TrialOutcome.Early: Color.PURPLE.value,
+    TrialOutcome.NotStarted: Color.LIGHTGRAY.value,
+    TrialOutcome.WrongResponse: Color.MAGENTA.value,
+    TrialOutcome.WrongStartSignal: Color.GRAY.value,
+    TrialOutcome.EarlyHit: Color.CYAN.value,
+    TrialOutcome.EarlyWrongResponse: Color.PINK.value,
+    TrialOutcome.InexpectedStartSignal: Color.DARKGRAY.value,
+}
+
+symbols = {
+    TrialOutcome.Hit: "o",
+    TrialOutcome.EyeErr: "+",
+    TrialOutcome.Late: "x",
+    TrialOutcome.Early: "v",
+    TrialOutcome.NotStarted: ".",
+    TrialOutcome.WrongResponse: "^",
+    TrialOutcome.WrongStartSignal: "+",
+    TrialOutcome.EarlyHit: "o",
+    TrialOutcome.EarlyWrongResponse: "o",
+    TrialOutcome.InexpectedStartSignal: "d",
 }
 
 # setup tkinter for file selection dialog
@@ -81,7 +110,7 @@ def plot_tdr(tdr: readTDR.TDR, fig=None):
             markeredgecolor=colors.get(outcome, None),
             markerfacecolor=colors.get(outcome, None),
             markersize=3,
-            marker="o",
+            marker=symbols.get(outcome, 'o'),
             linestyle="none",
             label=outcome.name,
         )
@@ -128,13 +157,18 @@ def plot_tdr(tdr: readTDR.TDR, fig=None):
     ax2_performance.xaxis.set_major_formatter(md.DateFormatter("%H:%M"))
 
     # add reaction time histogram
+    rt = [trial.reactionTimeMS for trial in tdr.get_hits() if trial.reactionTimeMS>0.0]
+    avgRt = np.median(rt)
     ax3_reactionTime.hist(
-        [trial.reactionTimeMS for trial in tdr.get_hits()],
+        rt,
         bins=50,
         color=colors[readTDR.TrialOutcome.Hit],
         edgecolor="k",
         linewidth=0.5,
     )
+    ax3_reactionTime.axvline(x=avgRt, color="k", linestyle="--")
+    ax3_reactionTime.annotate(text=f"median = {avgRt:.1f} ms",
+                              xy=(0.95, 0.95), xycoords="axes fraction", ha="right")
     ax3_reactionTime.set_xlabel("reaction time [ms]")
     ax3_reactionTime.set_ylabel("count")
     ax3_reactionTime.set_xlim(xmin=0.0)
