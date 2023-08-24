@@ -36,7 +36,7 @@ trial_duration = [trial.get_trial_duration()
 
 ## Plot TDR file
 
-[`plotTDR.py`](/readTDR/plotTDR.py) gives an example of how to use `readTDR` to plot a behavioral summary. `plotTDR` is also provided as a stand-alone executable on the [releases page](https://github.com/cog-neurophys-lab/readTDR/releases) and provides an easy to use way for online plotting of behavioral data such as the following:
+[`plotTDR.py`](/readTDR/plotTDR.py) gives an example of how to use `readTDR` to plot a behavioral summary using the Python libraries [Matplotlib](https://matplotlib.org) and [pandas](https://pandas.pydata.org). `plotTDR` is also provided as a stand-alone executable on the [releases page](https://github.com/cog-neurophys-lab/readTDR/releases) and provides an easy to use way for online plotting of behavioral data such as the following:
 
 ![Example behavioral plot created with plotTDR](/docs/plotTDR.png?raw=true "Optional Title")
 
