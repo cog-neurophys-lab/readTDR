@@ -1,5 +1,7 @@
 # readTDR
 
+**Note: Development of the code for reading TDR files will continue [here](https://github.com/brain-bremen/vstim-python-tools). As of 2025, this repository is archived.**
+
 Python tools for reading the Trial Descriptor Record created by VStim.
 
 [![ReadTDR Tests](https://github.com/cog-neurophys-lab/readTDR/actions/workflows/run_tests.yml/badge.svg)](https://github.com/cog-neurophys-lab/readTDR/actions/workflows/run_tests.yml)
